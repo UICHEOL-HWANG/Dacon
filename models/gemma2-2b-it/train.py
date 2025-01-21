@@ -1,5 +1,5 @@
 from src.training_manger import TrainingManager
-from src.model_manager import ModelManger
+from src.model_manager import ModelManager
 import argparse
 
 import pandas as pd 
@@ -18,7 +18,7 @@ def main():
     args = parser.parse_args()
     
     
-    model_manager = ModelManger()
+    model_manager = ModelManager()
     
     model = model_manager.model 
     tokenizer = model_manager.tokenizer

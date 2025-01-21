@@ -27,7 +27,10 @@ class TrainingManager:
             tuple: Tokenized train and test datasets.
         """
         # Convert pandas DataFrame to Dataset
+        data = data.sample(n=5000, random_state=42).reset_index(drop=True)
+        
         dataset = Dataset.from_pandas(data)
+
 
         # Ensure input and output columns are present
         if "input" not in dataset.column_names or "output" not in dataset.column_names:
