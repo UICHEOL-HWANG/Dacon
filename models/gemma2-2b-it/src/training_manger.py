@@ -44,6 +44,7 @@ class TrainingManager:
                 truncation=True,
                 max_length=self.max_length,
             )
+            
             outputs = self.tokenizer(
                 examples["output"],  # Tokenize the output column
                 padding="max_length",

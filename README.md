@@ -20,3 +20,8 @@
 매우 좋지 않았음....
 
 3. `Try → gemma-2-2b-it` 도전 예정 
+
+![alt text](./image/gemma.png)
+
+- 2025.01.21일 1차 파인튜닝 실험 
+    - batch_size = 1, `peft`, `trl` 활용한 양자화 도전(배치를 늘릴수록 VRAM 터지는 사고가...)
