@@ -18,7 +18,7 @@ class TrainingManager:
 
     def preprocess_data(self, data):
         """
-        Prepares the dataset by tokenizing and splitting it into train/test sets.
+        Prepares the dataset by tokenizing input and output texts.
 
         Args:
             data (pd.DataFrame): The input dataset as a pandas DataFrame.
@@ -28,39 +28,39 @@ class TrainingManager:
         """
         # Convert pandas DataFrame to Dataset
         dataset = Dataset.from_pandas(data)
-        
-        if "text" not in dataset.column_names:
-            dataset = dataset.rename_column("input", "text")  
+
+        # Ensure input and output columns are present
+        if "input" not in dataset.column_names or "output" not in dataset.column_names:
+            raise ValueError("Dataset must contain 'input' and 'output' columns.")
+
+        # Tokenize input and output
+        def tokenize_function(examples):
+            inputs = self.tokenizer(
+                examples["input"],  # Tokenize the input column
+                padding="max_length",
+                truncation=True,
+                max_length=self.max_length,
+            )
+            outputs = self.tokenizer(
+                examples["output"],  # Tokenize the output column
+                padding="max_length",
+                truncation=True,
+                max_length=self.max_length,
+            )
+            inputs["labels"] = outputs["input_ids"]  # Add output tokens as labels
+            return inputs
 
         # Split dataset into train and test sets
         split_data = dataset.train_test_split(test_size=0.1, seed=42)
-        train_dataset = split_data['train']
-        test_dataset = split_data['test']
+        train_dataset = split_data["train"]
+        test_dataset = split_data["test"]
 
         # Tokenize datasets
-        train = train_dataset.map(self.tokenize_function, batched=True)
-        test = test_dataset.map(self.tokenize_function, batched=True)
+        train = train_dataset.map(tokenize_function, batched=True)
+        test = test_dataset.map(tokenize_function, batched=True)
 
         return train, test
 
-    def tokenize_function(self, examples):
-        """
-        Tokenizes input text.
-
-        Args:
-            examples: A batch of examples from the dataset.
-
-        Returns:
-            dict: Tokenized inputs and attention masks.
-        """
-        tokenized = self.tokenizer(
-            examples['text'],
-            padding="max_length",
-            truncation=True,
-            max_length=128,
-            return_tensors="pt"
-        )
-        return tokenized
 
     def train(self, train_data, test_data):
         """
