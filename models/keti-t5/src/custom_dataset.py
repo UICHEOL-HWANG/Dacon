@@ -5,7 +5,7 @@ import pandas as pd
 class CustomDataset(Dataset):
     
     def __init__(self, data, tokenizer, max_length=128):
-        self.data = data
+        self.data = pd.read_csv(data)
         self.tokenizer = tokenizer
         self.max_length = max_length
         
