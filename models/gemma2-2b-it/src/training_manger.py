@@ -1,12 +1,11 @@
 from datasets import Dataset
-from sklearn.model_selection import train_test_split
 from transformers import TrainingArguments
 from trl import SFTTrainer
-import torch 
+import torch
+
 
 class TrainingManager:
     def __init__(self, model, tokenizer, train_file, output_dir, max_length=512, batch_size=8, learning_rate=5e-5, num_epochs=3):
-
         self.model = model
         self.tokenizer = tokenizer
         self.train_file = train_file
@@ -16,9 +15,34 @@ class TrainingManager:
         self.learning_rate = learning_rate
         self.num_epochs = num_epochs
 
+    @staticmethod
+    def create_prompt(input_text, output_text=None):
+        """
+        주어진 입력과 출력 텍스트를 기반으로 프롬프트를 생성합니다.
+        output_text가 None이면 테스트 시 사용됩니다.
+        """
+        if output_text:
+            return (
+                "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
+                "and natural-sounding Korean review that reflects its original meaning.\n"
+                f"Input: {input_text}\n"
+                "<end_of_turn>\n"
+                "<start_of_turn>Assistant:\n"
+                f"Output: {output_text}"
+            )
+        else:
+            return (
+                "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
+                "and natural-sounding Korean review that reflects its original meaning.\n"
+                f"Input: {input_text}\n"
+                "<end_of_turn>\n"
+                "<start_of_turn>Assistant:\n"
+                "Output:"
+            )
+
     def preprocess_data(self, data):
         """
-        Prepares the dataset by tokenizing input and output texts.
+        Prepares the dataset by applying the prompt template and tokenizing input and output texts.
 
         Args:
             data (pd.DataFrame): The input dataset as a pandas DataFrame.
@@ -26,45 +50,42 @@ class TrainingManager:
         Returns:
             tuple: Tokenized train and test datasets.
         """
-        # Convert pandas DataFrame to Dataset
-        data = data.sample(n=5000, random_state=42).reset_index(drop=True)
-        
+        # 샘플링 (다양성을 위해 비율로 설정)
+        data = data.sample(frac=0.1, random_state=42).reset_index(drop=True)
+
+        # Dataset 변환
         dataset = Dataset.from_pandas(data)
 
-
-        # Ensure input and output columns are present
+        # 입력과 출력 열 존재 여부 확인
         if "input" not in dataset.column_names or "output" not in dataset.column_names:
             raise ValueError("Dataset must contain 'input' and 'output' columns.")
 
-        # Tokenize input and output
+        # 프롬프트 생성 및 토크나이징 함수
         def tokenize_function(examples):
-            inputs = self.tokenizer(
-                examples["input"],  # Tokenize the input column
-                padding="max_length",
+            prompts = [
+                self.create_prompt(input_text=examples["input"][i], output_text=examples["output"][i])
+                for i in range(len(examples["input"]))
+            ]
+            tokenized = self.tokenizer(
+                prompts,
                 truncation=True,
                 max_length=self.max_length,
+                padding="longest",  # 동적으로 패딩
+                return_tensors="pt",
             )
-            
-            outputs = self.tokenizer(
-                examples["output"],  # Tokenize the output column
-                padding="max_length",
-                truncation=True,
-                max_length=self.max_length,
-            )
-            inputs["labels"] = outputs["input_ids"]  # Add output tokens as labels
-            return inputs
+            tokenized["labels"] = tokenized["input_ids"].clone()
+            return tokenized
 
-        # Split dataset into train and test sets
+        # Train/Test Split
         split_data = dataset.train_test_split(test_size=0.1, seed=42)
         train_dataset = split_data["train"]
         test_dataset = split_data["test"]
 
-        # Tokenize datasets
+        # 토크나이징 수행
         train = train_dataset.map(tokenize_function, batched=True)
         test = test_dataset.map(tokenize_function, batched=True)
 
         return train, test
-
 
     def train(self, train_data, test_data):
         """

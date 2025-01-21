@@ -35,3 +35,11 @@
     - https://huggingface.co/UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b
 
     ![alt text](./image/hug.png)
+
+    ![alt text](./image/ㅜㅜ.png)
+
+    별... 효용이 없어 보인다.. (개됐네)
+
+
+    # 그래서 ... 프롬프팅을 깜빡한걸 잊어서 개빡세게 넣을 예정 
+
