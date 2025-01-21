@@ -25,3 +25,13 @@
 
 - 2025.01.21일 1차 파인튜닝 실험 
     - batch_size = 1, `peft`, `trl` 활용한 양자화 도전(배치를 늘릴수록 VRAM 터지는 사고가...)
+    
+    - `수정사항` 
+        - `batch_size` : 10 
+        - `data_size`  : 10000
+        - `loss` : 3.8 
+    
+- `huggingFace link` 
+    - https://huggingface.co/UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b
+
+    ![alt text](./image/hug.png)
