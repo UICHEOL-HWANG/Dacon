@@ -82,8 +82,7 @@ class TrainingManager:
             save_total_limit=2,
             logging_dir=f"{self.output_dir}/logs",
             logging_steps=50,
-            fp16=True,
-            no_cuda=True
+            fp16=torch.cuda.is_available(),
         )
 
         # Initialize SFTTrainer
