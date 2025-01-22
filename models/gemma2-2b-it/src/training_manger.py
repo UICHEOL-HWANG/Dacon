@@ -1,6 +1,7 @@
 from datasets import Dataset
-from transformers import TrainingArguments
+from transformers import TrainingArguments, AutoModelForCausalLM, AutoTokenizer
 from trl import SFTTrainer
+from peft import PeftModel
 import torch
 
 
@@ -16,9 +17,6 @@ class TrainingManager:
         self.num_epochs = num_epochs
 
     def create_prompt(self, input_text, output_text=None):
-        """
-        Generates a prompt for the model using input and optional output text.
-        """
         if output_text:
             return (
                 "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
@@ -39,15 +37,6 @@ class TrainingManager:
             )
 
     def preprocess_data(self, data):
-        """
-        Prepares the dataset by applying the prompt template and tokenizing input and output texts.
-
-        Args:
-            data (pd.DataFrame): The input dataset as a pandas DataFrame.
-
-        Returns:
-            tuple: Tokenized train and test datasets.
-        """
         dataset = Dataset.from_pandas(data)
 
         if "input" not in dataset.column_names or "output" not in dataset.column_names:
@@ -62,35 +51,26 @@ class TrainingManager:
                 prompts,
                 truncation=True,
                 max_length=self.max_length,
-                padding="longest",  # Dynamically pad to the longest sequence
+                padding="longest",
                 return_tensors="pt",
             )
             tokenized["labels"] = tokenized["input_ids"].clone()
             return tokenized
 
-        # Train/Test Split
         split_data = dataset.train_test_split(test_size=0.1, seed=42)
         train_dataset = split_data["train"]
         test_dataset = split_data["test"]
 
-        # Tokenize datasets
         train = train_dataset.map(tokenize_function, batched=True, num_proc=4)
         test = test_dataset.map(tokenize_function, batched=True, num_proc=4)
 
         return train, test
 
     def train(self, train_data, test_data):
-        """
-        Trains the model using Hugging Face SFTTrainer.
-
-        Args:
-            train_data: Tokenized training dataset.
-            test_data: Tokenized test dataset.
-        """
         training_args = TrainingArguments(
             output_dir=self.output_dir,
             per_device_train_batch_size=self.batch_size,
-            gradient_accumulation_steps=4,  # Adjusted for effective batch size
+            gradient_accumulation_steps=4,
             learning_rate=self.learning_rate,
             num_train_epochs=self.num_epochs,
             evaluation_strategy="steps",
@@ -99,7 +79,7 @@ class TrainingManager:
             save_total_limit=2,
             logging_dir=f"{self.output_dir}/logs",
             logging_steps=50,
-            fp16=torch.cuda.is_available(),  # Enable mixed precision if supported
+            fp16=torch.cuda.is_available(),
         )
 
         trainer = SFTTrainer(
@@ -110,10 +90,18 @@ class TrainingManager:
             tokenizer=self.tokenizer,
         )
 
-        # Start training
         trainer.train()
 
-        # Save model and tokenizer
-        trainer.save_model(self.output_dir)
-        self.tokenizer.save_pretrained(self.output_dir)
-        print(f"Model fine-tuned and saved to {self.output_dir}")
+        # LoRA 어댑터 저장
+        ADAPTER_MODEL = "lora_adapter_7b"
+        trainer.model.save_pretrained(ADAPTER_MODEL)
+        self.tokenizer.save_pretrained(ADAPTER_MODEL)
+        print(f"LoRA Adapter model and tokenizer saved to {ADAPTER_MODEL}")
+
+        # 파인튜닝 통합 모델 저장
+        BASE_MODEL = "beomi/gemma-ko-7b"
+        model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, device_map="auto", torch_dtype=torch.float16)
+        model = PeftModel.from_pretrained(model, ADAPTER_MODEL, device_map="auto", torch_dtype=torch.float16)
+        model.save_pretrained("gemma_7b_finetuning")
+        self.tokenizer.save_pretrained("gemma_7b_finetuning")
+        print(f"Fine-tuned model and tokenizer saved to gemma_7b_finetuning")
