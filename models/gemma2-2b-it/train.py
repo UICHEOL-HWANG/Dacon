@@ -11,7 +11,7 @@ def main():
     parser.add_argument("--train_file", type=str, required=True, help="Path to the training dataset (CSV format).")
     parser.add_argument("--output_dir", type=str, required=True, help="Directory to save the fine-tuned model.")
     parser.add_argument("--max_length", type=int, default=128, help="Maximum sequence length for tokenization.")
-    parser.add_argument("--batch_size", type=int, default=8, help="Training batch size.")
+    parser.add_argument("--batch_size", type=int, default=10, help="Training batch size.")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="Learning rate for training.")
     parser.add_argument("--num_epochs", type=int, default=3, help="Number of training epochs.")
     
