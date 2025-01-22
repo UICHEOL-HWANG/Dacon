@@ -25,25 +25,16 @@ class ModelManager:
 
         # LoRA 설정
         lora_config = LoraConfig(
-            r=16,                                 # LoRA rank
+            r=8,                                 # LoRA rank
             lora_alpha=32,                        # LoRA scaling factor
             target_modules=[
-                "self_attn.q_proj", 
-                "self_attn.k_proj", 
-                "self_attn.v_proj", 
-                "self_attn.o_proj"
+                "q_proj", "v_proj", "k_proj", "o_proj", 
+                "gate_proj", "down_proj", "up_proj"
             ],                                    # 수정할 레이어
             lora_dropout=0.1,                     # 드롭아웃 비율
             bias="none",                          # Bias 처리 방법
             task_type="CAUSAL_LM"                 # 언어 모델 타입
         )
-
-        # Target Modules 확인
-        print("=== Target Modules 확인 ===")
-        for name, module in self.model.named_modules():
-            if any(target in name for target in ["q_proj", "k_proj", "v_proj", "o_proj"]):
-                print(name)
-
         # 모델에 LoRA 적용
         self.model = get_peft_model(self.model, lora_config)
 
@@ -51,6 +42,3 @@ class ModelManager:
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.tokenizer.padding_side = "right"
-
-        # 훈련 가능한 파라미터 출력 (디버깅용)
-        self.model.print_trainable_parameters()

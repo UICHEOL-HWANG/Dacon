@@ -15,11 +15,9 @@ class TrainingManager:
         self.learning_rate = learning_rate
         self.num_epochs = num_epochs
 
-    @staticmethod
-    def create_prompt(input_text, output_text=None):
+    def create_prompt(self, input_text, output_text=None):
         """
-        주어진 입력과 출력 텍스트를 기반으로 프롬프트를 생성합니다.
-        output_text가 None이면 테스트 시 사용됩니다.
+        Generates a prompt for the model using input and optional output text.
         """
         if output_text:
             return (
@@ -50,17 +48,11 @@ class TrainingManager:
         Returns:
             tuple: Tokenized train and test datasets.
         """
-        # 샘플링 (다양성을 위해 비율로 설정)
-        data = data.sample(frac=0.1, random_state=42).reset_index(drop=True)
-
-        # Dataset 변환
         dataset = Dataset.from_pandas(data)
 
-        # 입력과 출력 열 존재 여부 확인
         if "input" not in dataset.column_names or "output" not in dataset.column_names:
             raise ValueError("Dataset must contain 'input' and 'output' columns.")
 
-        # 프롬프트 생성 및 토크나이징 함수
         def tokenize_function(examples):
             prompts = [
                 self.create_prompt(input_text=examples["input"][i], output_text=examples["output"][i])
@@ -70,7 +62,7 @@ class TrainingManager:
                 prompts,
                 truncation=True,
                 max_length=self.max_length,
-                padding="longest",  # 동적으로 패딩
+                padding="longest",  # Dynamically pad to the longest sequence
                 return_tensors="pt",
             )
             tokenized["labels"] = tokenized["input_ids"].clone()
@@ -81,9 +73,9 @@ class TrainingManager:
         train_dataset = split_data["train"]
         test_dataset = split_data["test"]
 
-        # 토크나이징 수행
-        train = train_dataset.map(tokenize_function, batched=True)
-        test = test_dataset.map(tokenize_function, batched=True)
+        # Tokenize datasets
+        train = train_dataset.map(tokenize_function, batched=True, num_proc=4)
+        test = test_dataset.map(tokenize_function, batched=True, num_proc=4)
 
         return train, test
 
@@ -95,10 +87,10 @@ class TrainingManager:
             train_data: Tokenized training dataset.
             test_data: Tokenized test dataset.
         """
-        # Set training arguments
         training_args = TrainingArguments(
             output_dir=self.output_dir,
             per_device_train_batch_size=self.batch_size,
+            gradient_accumulation_steps=4,  # Adjusted for effective batch size
             learning_rate=self.learning_rate,
             num_train_epochs=self.num_epochs,
             evaluation_strategy="steps",
@@ -107,10 +99,9 @@ class TrainingManager:
             save_total_limit=2,
             logging_dir=f"{self.output_dir}/logs",
             logging_steps=50,
-            fp16=torch.cuda.is_available(),
+            fp16=torch.cuda.is_available(),  # Enable mixed precision if supported
         )
 
-        # Initialize SFTTrainer
         trainer = SFTTrainer(
             model=self.model,
             args=training_args,
@@ -122,7 +113,7 @@ class TrainingManager:
         # Start training
         trainer.train()
 
-        # Save the model and tokenizer
+        # Save model and tokenizer
         trainer.save_model(self.output_dir)
         self.tokenizer.save_pretrained(self.output_dir)
         print(f"Model fine-tuned and saved to {self.output_dir}")

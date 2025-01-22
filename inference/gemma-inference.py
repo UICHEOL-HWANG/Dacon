@@ -2,7 +2,29 @@ import pandas as pd
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
+
+def create_prompt(input_text, output_text=None):
+    """
+    Creates a prompt for the model to generate outputs.
+    """
+    if output_text:
+        return (
+            f"Transform the obfuscated Korean review into its natural form:\n"
+            f"Input: {input_text}\n"
+            f"Output: {output_text}"
+        )
+    else:
+        return (
+            f"Transform the obfuscated Korean review into its natural form:\n"
+            f"Input: {input_text}\n"
+            "Output:"
+        )
+
+
 def remove_repeated_phrases(text):
+    """
+    Removes repeated phrases from the generated text.
+    """
     phrases = text.split(" ")
     seen = set()
     result = []
@@ -12,45 +34,46 @@ def remove_repeated_phrases(text):
             seen.add(phrase)
     return " ".join(result)
 
+
 def main():
+    # Paths
     MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b"
     TRAIN_FILE = "../data/train.csv"
     TEST_FILE = "../data/test.csv"
     OUTPUT_FILES = "../data/submission.csv"
 
+    # Device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(MODEL_PATH).to(device)
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
-    # 학습 데이터 로드 및 샘플 생성
+    # Load training data and create system prompt
     train = pd.read_csv(TRAIN_FILE)
     samples = [
-        f"Input: {train['input'][i]} → Output: {train['output'][i]}"
-        for i in range(min(5, len(train)))
+        create_prompt(input_text=train['input'][i], output_text=train['output'][i])
+        for i in range(min(3, len(train)))  # Use top 3 samples
     ]
-    system_prompt = "\n".join(samples)
+    system_prompt = "\n\n".join(samples)
 
-    # 테스트 데이터 로드
+    # Load test data
     test = pd.read_csv(TEST_FILE)
+    test_subset = test.iloc[:3].copy()  # 테스트 데이터의 상위 3개를 복사
     restored_reviews = []
 
-    # 테스트 데이터 처리
-    for index, row in test.iterrows():
+    # Process test data
+    for index, row in test_subset.iterrows():
         query = row["input"]
 
-        # 프롬프트 생성
-        prompt = (
-            f"{system_prompt}\n\n"
-            f"Input: {query}\n"
-            "Output:"
-        )
+        # Create prompt for the current test input
+        prompt = f"{system_prompt}\n\n{create_prompt(input_text=query)}"
 
-        # 입력 토큰화 및 GPU로 이동
+        # Tokenize input and move to device
         input_ids = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True).input_ids.to(device)
 
-        # 모델 추론
+        # Generate output from the model
         outputs = model.generate(
             input_ids=input_ids,
             max_new_tokens=150,
@@ -59,23 +82,23 @@ def main():
             do_sample=True,
         )
 
-        # 생성된 텍스트 디코딩
+        # Decode and process the generated output
         generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        # 중복된 구문 제거
         result = remove_repeated_phrases(generated_text)
 
-        # 디버깅 출력
-        print(f"Processing Row {index + 1}/{len(test)}")
+        # Debugging output
+        print(f"Processing Row {index + 1}/{len(test_subset)}")
         print(f"Input: {query}")
         print(f"Output: {result}\n")
 
+        # Append result
         restored_reviews.append(result.strip())
 
-    # 결과 저장
-    test["output"] = restored_reviews
-    test.to_csv(OUTPUT_FILES, index=False, encoding="utf-8-sig")
+    # Save results to a CSV file
+    test_subset["output"] = restored_reviews
+    test_subset.to_csv(OUTPUT_FILES, index=False, encoding="utf-8-sig")
     print(f"Results saved to {OUTPUT_FILES}")
+
 
 if __name__ == "__main__":
     main()
