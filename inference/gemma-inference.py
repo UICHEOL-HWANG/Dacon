@@ -1,11 +1,12 @@
-import re
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from datasets import Dataset
 import pandas as pd
-import torch 
+import torch
+
 
 def create_prompt(input_text):
     """
-    망가진 글자를 복원 시키기 위한 프롬프트 
+    망가진 글자를 복원시키기 위한 프롬프트.
     """
     return (
         "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
@@ -17,20 +18,22 @@ def create_prompt(input_text):
     )
 
 
-def clean_generated_text(generated_text):
+def process_batch(batch, pipeline):
     """
-    regex를 이용한 문자열 클렌징
+    배치 데이터를 처리하는 함수.
     """
-    # Find 'Output:' and get everything after it
-    output_start = generated_text.find("Output:")
-    if output_start != -1:
-        result = generated_text[output_start + len("Output:"):].strip()
-    else:
-        result = generated_text.strip()
-
-    # Remove unwanted tokens like <end_of_turn>, <start_of_turn>, etc.
-    result = re.sub(r"<.*?>", "", result).strip()
-    return result
+    prompts = [create_prompt(text) for text in batch["input"]]
+    outputs = pipeline(
+        prompts,
+        num_return_sequences=1,
+        temperature=1.0,
+        top_p=0.9,
+        max_new_tokens=150,
+        do_sample=True,
+        eos_token_id=pipeline.tokenizer.eos_token_id,
+        pad_token_id=pipeline.tokenizer.pad_token_id,
+    )
+    return {"output": [output[0]["generated_text"] for output in outputs]}
 
 
 def main():
@@ -38,14 +41,13 @@ def main():
     MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma-7b"
     TEST_FILE = "../data/test.csv"
     OUTPUT_FILES = "../data/submission.csv"
-    
 
     # Load model and tokenizer
     print("Loading model and tokenizer...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
-        device_map="auto",
-        torch_dtype=torch.bfloat16
+        device_map="auto",        # 자동으로 GPU로 분배
+        torch_dtype=torch.float16  # FP16 사용
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
@@ -54,50 +56,26 @@ def main():
     text_pipeline = pipeline(
         "text-generation",
         model=model,
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
+        batch_size=8  # 배치 크기 설정
     )
 
-    # Load test data
+    # Load test data into Hugging Face Dataset
     print("Loading test data...")
-    test = pd.read_csv(TEST_FILE)
-    restored_reviews = []
+    test_df = pd.read_csv(TEST_FILE)
+    test_dataset = Dataset.from_pandas(test_df)
 
-    # Process test data
-    print("Processing test data...")
-    for index, row in test.iterrows():
-        query = row["input"]
-
-        # Create prompt for the current test input
-        prompt = create_prompt(query)
-
-        # Generate output from the model
-        outputs = text_pipeline(
-            prompt,
-            num_return_sequences=1,
-            temperature=1.0,
-            top_p=0.9,
-            max_new_tokens=150,
-            do_sample=True,
-        )
-
-        # Extract the generated text
-        generated_text = outputs[0]["generated_text"]
-
-        # Clean the output text
-        result = clean_generated_text(generated_text)
-
-        # Debugging output (optional)
-        print(f"Processing Row {index + 1}/{len(test)}")
-        print(f"Input: {query}")
-        print(f"Output: {result}\n")
-
-        # Append result
-        restored_reviews.append(result)
+    # Process data in batches
+    print("Processing test data in batches...")
+    processed_dataset = test_dataset.map(
+        lambda batch: process_batch(batch, text_pipeline),  # 직접 참조
+        batched=True,
+        batch_size=8
+    )
 
     # Save results to a CSV file
     print("Saving results to file...")
-    test["output"] = restored_reviews
-    test.to_csv(OUTPUT_FILES, index=False, encoding="utf-8-sig")
+    processed_dataset.to_csv(OUTPUT_FILES, index=False, encoding="utf-8-sig")
     print(f"Results saved to {OUTPUT_FILES}")
 
 
