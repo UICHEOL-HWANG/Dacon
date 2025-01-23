@@ -25,7 +25,7 @@ def main():
     # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
-        device_map={"":0}
+        device_map="auto"
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
@@ -34,7 +34,6 @@ def main():
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        device=0  # Ensure pipeline uses GPU
     )
 
     # Load test data
