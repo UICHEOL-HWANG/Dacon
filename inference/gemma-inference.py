@@ -1,11 +1,11 @@
 import re
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
 import pandas as pd
-
+import torch 
 
 def create_prompt(input_text):
     """
-    Creates a simple prompt for the model to generate outputs.
+    망가진 글자를 복원 시키기 위한 프롬프트 
     """
     return (
         "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
@@ -19,7 +19,7 @@ def create_prompt(input_text):
 
 def clean_generated_text(generated_text):
     """
-    Cleans the generated text by extracting only the content after 'Output:' and removing unwanted tokens.
+    regex를 이용한 문자열 클렌징
     """
     # Find 'Output:' and get everything after it
     output_start = generated_text.find("Output:")
@@ -38,19 +38,21 @@ def main():
     MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma-7b"
     TEST_FILE = "../data/test.csv"
     OUTPUT_FILES = "../data/submission.csv"
-
-    # Configure quantization for INT8
-    quantization_config = BitsAndBytesConfig(
-        load_in_8bit=True,
-        llm_int8_enable_fp32_cpu_offload=True  # Stability improvement for INT8
+    
+    bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,                       # 4비트 양자화 활성화
+    bnb_4bit_quant_type="nf4",               # NF4 양자화 방식
+    bnb_4bit_use_double_quant=True,          # Double Quantization 활성화
+    bnb_4bit_compute_dtype=torch.bfloat16    # 계산 데이터 타입 (bfloat16 사용)
     )
+
 
     # Load model and tokenizer
     print("Loading model and tokenizer...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
         device_map="auto",
-        quantization_config=quantization_config
+        quantization_config=bnb_config
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
@@ -83,8 +85,6 @@ def main():
             top_p=0.9,
             max_new_tokens=150,
             do_sample=True,
-            eos_token_id=tokenizer.eos_token_id,
-            pad_token_id=tokenizer.pad_token_id,
         )
 
         # Extract the generated text
