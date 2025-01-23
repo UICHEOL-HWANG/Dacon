@@ -18,13 +18,14 @@ def create_prompt(input_text):
 
 def main():
     # Paths
-    MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b"
+    MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma-7b"
     TEST_FILE = "../data/test.csv"
     OUTPUT_FILES = "../data/submission.csv"
 
     # Load model and tokenizer
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
+        device_map={"":0}
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
