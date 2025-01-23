@@ -39,20 +39,13 @@ def main():
     TEST_FILE = "../data/test.csv"
     OUTPUT_FILES = "../data/submission.csv"
     
-    bnb_config = BitsAndBytesConfig(
-    load_in_4bit=True,                       # 4비트 양자화 활성화
-    bnb_4bit_quant_type="nf4",               # NF4 양자화 방식
-    bnb_4bit_use_double_quant=True,          # Double Quantization 활성화
-    bnb_4bit_compute_dtype=torch.bfloat16    # 계산 데이터 타입 (bfloat16 사용)
-    )
-
 
     # Load model and tokenizer
     print("Loading model and tokenizer...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
         device_map="auto",
-        quantization_config=bnb_config
+        torch_dtype=torch.bfloat16
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
