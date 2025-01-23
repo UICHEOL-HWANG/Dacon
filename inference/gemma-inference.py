@@ -1,3 +1,4 @@
+import re
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
 import pandas as pd
 
@@ -16,13 +17,29 @@ def create_prompt(input_text):
     )
 
 
+def clean_generated_text(generated_text):
+    """
+    Cleans the generated text by extracting only the content after 'Output:' and removing unwanted tokens.
+    """
+    # Find 'Output:' and get everything after it
+    output_start = generated_text.find("Output:")
+    if output_start != -1:
+        result = generated_text[output_start + len("Output:"):].strip()
+    else:
+        result = generated_text.strip()
+
+    # Remove unwanted tokens like <end_of_turn>, <start_of_turn>, etc.
+    result = re.sub(r"<.*?>", "", result).strip()
+    return result
+
+
 def main():
     # Paths
     MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma-7b"
     TEST_FILE = "../data/test.csv"
     OUTPUT_FILES = "../data/submission.csv"
 
-
+    # Configure quantization for INT8
     quantization_config = BitsAndBytesConfig(
         load_in_8bit=True,
         llm_int8_enable_fp32_cpu_offload=True  # Stability improvement for INT8
@@ -37,7 +54,7 @@ def main():
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
-
+    # Initialize pipeline
     print("Initializing pipeline...")
     text_pipeline = pipeline(
         "text-generation",
@@ -55,42 +72,34 @@ def main():
     for index, row in test.iterrows():
         query = row["input"]
 
-        # Validate input
-        if not query.strip():
-            query = "Default prompt for empty input."
-
         # Create prompt for the current test input
         prompt = create_prompt(query)
 
         # Generate output from the model
-        try:
-            outputs = text_pipeline(
-                prompt,
-                num_return_sequences=1,
-                temperature=1.0,
-                top_p=0.9,
-                max_new_tokens=150,
-                do_sample=True,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id,
-            )
+        outputs = text_pipeline(
+            prompt,
+            num_return_sequences=1,
+            temperature=1.0,
+            top_p=0.9,
+            max_new_tokens=150,
+            do_sample=True,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
 
-            # Extract the generated text
-            generated_text = outputs[0]["generated_text"]
+        # Extract the generated text
+        generated_text = outputs[0]["generated_text"]
 
-            # Remove "Output:" and trailing whitespaces
-            output_start = generated_text.find("Output:")
-            if output_start != -1:
-                result = generated_text[output_start + len("Output:"):].strip()
-            else:
-                result = generated_text.strip()
+        # Clean the output text
+        result = clean_generated_text(generated_text)
 
-            # Append result
-            restored_reviews.append(result)
+        # Debugging output (optional)
+        print(f"Processing Row {index + 1}/{len(test)}")
+        print(f"Input: {query}")
+        print(f"Output: {result}\n")
 
-        except Exception as e:
-            print(f"Error processing row {index}: {e}")
-            restored_reviews.append("Error")
+        # Append result
+        restored_reviews.append(result)
 
     # Save results to a CSV file
     print("Saving results to file...")
