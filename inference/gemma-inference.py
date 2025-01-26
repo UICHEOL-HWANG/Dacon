@@ -1,12 +1,11 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from datasets import Dataset
 import pandas as pd
-import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import torch 
 
-
+# 프롬프트 생성 함수
 def create_prompt(input_text):
     """
-    망가진 글자를 복원시키기 위한 프롬프트.
+    망가진 글자를 복원시키기 위한 프롬프트 생성.
     """
     return (
         "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
@@ -14,69 +13,103 @@ def create_prompt(input_text):
         f"Input: {input_text}\n"
         "<end_of_turn>\n"
         "<start_of_turn>Assistant:\n"
-        "Output:"
+        "Output(Korea Only):"
     )
 
 
-def process_batch(batch, pipeline):
+# 반복된 문구 제거 함수
+def remove_repeated_phrases(text):
     """
-    배치 데이터를 처리하는 함수.
+    반복된 문구를 제거하여 결과를 정제.
     """
-    prompts = [create_prompt(text) for text in batch["input"]]
-    outputs = pipeline(
-        prompts,
-        num_return_sequences=1,
-        temperature=1.0,
-        top_p=0.9,
-        max_new_tokens=150,
-        do_sample=True,
-        eos_token_id=pipeline.tokenizer.eos_token_id,
-        pad_token_id=pipeline.tokenizer.pad_token_id,
-    )
-    return {"output": [output[0]["generated_text"] for output in outputs]}
+    phrases = text.split()
+    seen = set()
+    result = []
+    for phrase in phrases:
+        if phrase not in seen:
+            result.append(phrase)
+            seen.add(phrase)
+    return " ".join(result)
 
 
 def main():
-    # Paths
-    MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma-7b"
+    # 경로 설정
+    MODEL_PATH = "../models/gemma2-2b-it/merge/"
     TEST_FILE = "../data/test.csv"
-    OUTPUT_FILES = "../data/submission.csv"
+    OUTPUT_FILE = "./submission.csv"
 
-    # Load model and tokenizer
+    # 모델 및 토크나이저 로드
     print("Loading model and tokenizer...")
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
-        device_map="auto",        # 자동으로 GPU로 분배
+        device_map="auto",        # GPU 자동 할당
         torch_dtype=torch.float16  # FP16 사용
     )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
 
-    # Initialize pipeline
-    print("Initializing pipeline...")
-    text_pipeline = pipeline(
+    # 텍스트 생성 파이프라인 초기화
+    print("Initializing text generation pipeline...")
+    text_gen_pipeline = pipeline(
         "text-generation",
         model=model,
-        tokenizer=tokenizer,
-        batch_size=8  # 배치 크기 설정
+        tokenizer=tokenizer
     )
 
-    # Load test data into Hugging Face Dataset
+    # 테스트 데이터 로드
     print("Loading test data...")
-    test_df = pd.read_csv(TEST_FILE)
-    test_dataset = Dataset.from_pandas(test_df)
+    test = pd.read_csv(TEST_FILE, encoding="utf-8-sig")
 
-    # Process data in batches
-    print("Processing test data in batches...")
-    processed_dataset = test_dataset.map(
-        lambda batch: process_batch(batch, text_pipeline),  # 직접 참조
-        batched=True,
-        batch_size=8
-    )
+    restored_reviews = []
 
-    # Save results to a CSV file
-    print("Saving results to file...")
-    processed_dataset.to_csv(OUTPUT_FILES, index=False, encoding="utf-8-sig")
-    print(f"Results saved to {OUTPUT_FILES}")
+    # 데이터 처리
+    print("Processing test data...")
+    for index, row in test.iterrows():
+        query = row['input']  # 입력 데이터
+        prompt = create_prompt(query)
+
+        print(f"Processing index {index}:")
+        print(f"Input Query: {query}")
+        print(f"Generated Prompt: {prompt}")
+
+        # 텍스트 생성
+        generated = text_gen_pipeline(
+            prompt,
+            num_return_sequences=1,
+            temperature=0.2,
+            top_p=0.9,
+            max_new_tokens=len(query),
+            do_sample=True,
+            eos_token_id=tokenizer.eos_token_id,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+
+        # 생성된 텍스트에서 결과 추출
+        generated_text = generated[0]['generated_text']
+        print(f"Generated Text: {generated_text}")
+
+        # 'Output:' 이후 텍스트만 추출
+        output_start = generated_text.find("Output:")
+        if output_start != -1:
+            result = generated_text[output_start + len("Output:"):].strip()
+        else:
+            result = generated_text.strip()
+
+        # '<end_of_turn>' 이전 텍스트만 유지
+        result = result.split("<end_of_turn>")[0].strip()
+
+        # 반복된 문구 제거
+        result = remove_repeated_phrases(result)
+        print(f"Final Processed Output: {result}")
+
+        # 결과 저장
+        restored_reviews.append(result)
+        print("-" * 50)  # 로그 구분선
+
+    # 결과를 저장할 파일 생성
+    print("Saving results...")
+    submission = pd.DataFrame({"input": test['input'], "output": restored_reviews})
+    submission.to_csv(OUTPUT_FILE, index=False, encoding="utf-8-sig")
+    print(f"Results saved to {OUTPUT_FILE}")
 
 
 if __name__ == "__main__":

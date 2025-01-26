@@ -14,7 +14,7 @@ class ModelManager:
         )
 
         # 모델 경로
-        self.model_path = "google/gemma-2-2b-it"
+        self.model_path = "beomi/gemma-ko-2b"
 
         # 4-bit 양자화 모델 로드
         self.model = AutoModelForCausalLM.from_pretrained(

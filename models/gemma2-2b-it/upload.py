@@ -12,7 +12,7 @@ model = AutoModelForCausalLM.from_pretrained(
 tokenizer = AutoTokenizer.from_pretrained(OUTPUT_DIR)
 
 # 모델 업로드
-model.push_to_hub("UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b")
-tokenizer.push_to_hub("UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b")
+model.push_to_hub("UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma2-2b")
+tokenizer.push_to_hub("UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma2-2b")
 
 print("Model and tokenizer pushed to Hugging Face Hub.")

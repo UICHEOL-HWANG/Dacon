@@ -45,6 +45,27 @@
 
 프롬프팅 추가 이후 
 
-![alt text](image.png)
+![alt text](./image/result.png)
 
 나쁘지 않은 성능 
+
+---- 
+
+#1월 26일 첫 제출 성과 
+
+![](./image/board.png)
+
+`Model Spec` 
+
+1. `beomi/gemma-ko-2b fine tune`
+    - 모델 링크 : https://huggingface.co/UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma2-2b
+
+2. `Batch_size : 10, learning_rate : 5e-5, epochs : 3, max_length : 128` 
+
+3. 앞으로의 개선점
+    - `length_check.py` 를 통해 데이터의 평균 length 측정결과 200자 이상 
+    - `max_length`를 256 단위로 조절 예정 
+    - `batch_size` : 10 - 12로 증강 예정
+
+4. 최종 순위
+    - 59위, `f1_score : 0.18575`

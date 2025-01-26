@@ -92,16 +92,6 @@ class TrainingManager:
 
         trainer.train()
 
-        # LoRA 어댑터 저장
-        ADAPTER_MODEL = "lora_adapter_7b"
-        trainer.model.save_pretrained(ADAPTER_MODEL)
-        self.tokenizer.save_pretrained(ADAPTER_MODEL)
-        print(f"LoRA Adapter model and tokenizer saved to {ADAPTER_MODEL}")
-
-        # 파인튜닝 통합 모델 저장
-        BASE_MODEL = "beomi/gemma-ko-7b"
-        model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, device_map="auto", torch_dtype=torch.float16)
-        model = PeftModel.from_pretrained(model, ADAPTER_MODEL, device_map="auto", torch_dtype=torch.float16)
-        model.save_pretrained("gemma_7b_finetuning")
-        self.tokenizer.save_pretrained("gemma_7b_finetuning")
-        print(f"Fine-tuned model and tokenizer saved to gemma_7b_finetuning")
+        trainer.model.save_pretrained(self.output_dir)
+        self.tokenizer.save_pretrained(self.output_dir)
+        print(f"LoRA Adapter model and tokenizer saved to {self.output_dir}")

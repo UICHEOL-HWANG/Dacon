@@ -33,6 +33,9 @@ MANIFEST
 *.manifest
 *.spec
 
+models/gemma2-2b-it/
+models/gemma2-2b-it/lora-adapter_7b/
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

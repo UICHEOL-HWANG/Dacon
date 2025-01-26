@@ -2,8 +2,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import torch 
 
-BASE_MODEL_PATH = "google/gemma-2-2b"  # 본 모델 경로
-ADAPTER_MODEL_PATH = "UICHEOL-HWANG/Dacon-contest-obfuscation-gemma2-2b"  # 어댑터 저장된 경로
+BASE_MODEL_PATH = "beomi/gemma-ko-2b"  # 본 모델 경로
+ADAPTER_MODEL_PATH = "./lora_adapter_7b/"  # 어댑터 저장된 경로
 OUTPUT_DIR = "./merge"  # 합쳐진 모델 저장 경로
 
 # 본 모델 로드
