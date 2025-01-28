@@ -32,7 +32,7 @@
         - `loss` : 3.8 
     
 - `huggingFace link` 
-    - https://huggingface.co/UICHEOL-HWANG/Dacon-contest-obfuscation-gemma-2b
+    - https://huggingface.co/UICHEOL-HWANG/Dacon-contest-obfuscation-ko-gemma-2b
 
     ![alt text](./image/hug.png)
 
