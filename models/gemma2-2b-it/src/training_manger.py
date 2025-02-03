@@ -3,71 +3,63 @@ from transformers import TrainingArguments, AutoModelForCausalLM, AutoTokenizer
 from trl import SFTTrainer
 from peft import PeftModel
 import torch
-
+from functools import partial
 
 class TrainingManager:
     def __init__(self, model, tokenizer, train_file, output_dir, max_length=512, batch_size=8, learning_rate=5e-5, num_epochs=3):
         self.model = model
         self.tokenizer = tokenizer
-        self.train_file = train_file
+        self.train_file = train_file  # 예: CSV 파일 경로 등 (데이터 로딩 시 활용)
         self.output_dir = output_dir
         self.max_length = max_length
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.num_epochs = num_epochs
 
-    def create_prompt(self, input_text, output_text=None):
-        if output_text:
-            return (
-                "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
-                "and natural-sounding Korean review that reflects its original meaning.\n"
-                f"Input: {input_text}\n"
-                "<end_of_turn>\n"
-                "<start_of_turn>Assistant:\n"
-                f"Output: {output_text}"
-            )
-        else:
-            return (
-                "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, "
-                "and natural-sounding Korean review that reflects its original meaning.\n"
-                f"Input: {input_text}\n"
-                "<end_of_turn>\n"
-                "<start_of_turn>Assistant:\n"
-                "Output:"
-            )
+    @staticmethod
+    def create_prompt(input_text, output_text):
+        prompt = (
+            "<start_of_turn> Your task is to transform the given obfuscated Korean review into a clear, correct, and natural-sounding Korean review that reflects its original meaning.\n"
+            f"Input: {input_text}\n"
+            "<end_of_turn>\n"
+            "<start_of_turn>Assistant:\n"
+            f"Output: {output_text}"
+        )
+        return prompt
+
+    @staticmethod
+    def format_chat_template(row, tokenizer, max_length):
+        # row는 딕셔너리 형태로 "input"과 "output" 키를 가져야 합니다.
+        prompt = TrainingManager.create_prompt(row["input"], row["output"])
+        # encode()를 사용하면 토큰 ID 리스트를 반환합니다.
+        tokens = tokenizer.encode(prompt, truncation=True, max_length=max_length)
+        row["input_ids"] = tokens
+        return row
 
     def preprocess_data(self, data):
-        dataset = Dataset.from_pandas(data)
+        """
+        data: pandas.DataFrame 혹은 datasets.Dataset
+        데이터셋에 "input"과 "output" 컬럼이 있다고 가정합니다.
+        """
+        # 만약 data가 pandas DataFrame이면 Dataset으로 변환
+        if not isinstance(data, Dataset):
+            data = Dataset.from_pandas(data)
 
-        if "input" not in dataset.column_names or "output" not in dataset.column_names:
+        # 컬럼 확인
+        if "input" not in data.column_names or "output" not in data.column_names:
             raise ValueError("Dataset must contain 'input' and 'output' columns.")
 
-        def tokenize_function(examples):
-            prompts = [
-                self.create_prompt(input_text=examples["input"][i], output_text=examples["output"][i])
-                for i in range(len(examples["input"]))
-            ]
-            tokenized = self.tokenizer(
-                prompts,
-                truncation=True,
-                max_length=self.max_length,
-                padding="longest",
-            )
-            # labels: 패딩 토큰을 -100으로 변환
-            labels = [] 
-            for input_ids in tokenized["input_ids"]:
-                labels.append([tok if tok != self.tokenizer.pad_token_id else -100 for tok in input_ids])
-            tokenized["labels"] = labels
-            return tokenized
+        # format_chat_template를 적용 (batched=False 사용)
+        # 내부 함수가 모듈 최상위에 있으므로 멀티프로세싱 시 피클링 문제를 최소화
+        tokenize_fn = partial(TrainingManager.format_chat_template, tokenizer=self.tokenizer, max_length=self.max_length)
+        processed_dataset = data.map(tokenize_fn, batched=False, num_proc=4)
 
-        split_data = dataset.train_test_split(test_size=0.1, seed=42)
+        # train/test split (예: 90% train, 10% test)
+        split_data = processed_dataset.train_test_split(test_size=0.1, seed=42)
         train_dataset = split_data["train"]
         test_dataset = split_data["test"]
 
-        train = train_dataset.map(tokenize_function, batched=True, num_proc=4)
-        test = test_dataset.map(tokenize_function, batched=True, num_proc=4)
-
-        return train, test
+        return train_dataset, test_dataset
 
     def train(self, train_data, test_data):
         training_args = TrainingArguments(
