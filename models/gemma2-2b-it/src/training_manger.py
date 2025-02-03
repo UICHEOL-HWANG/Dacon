@@ -54,7 +54,7 @@ class TrainingManager:
                 padding="longest",
             )
             # labels: 패딩 토큰을 -100으로 변환
-            labels = []
+            labels = [] 
             for input_ids in tokenized["input_ids"]:
                 labels.append([tok if tok != self.tokenizer.pad_token_id else -100 for tok in input_ids])
             tokenized["labels"] = labels
