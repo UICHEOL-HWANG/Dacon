@@ -52,9 +52,12 @@ class TrainingManager:
                 truncation=True,
                 max_length=self.max_length,
                 padding="longest",
-                return_tensors="pt",
             )
-            tokenized["labels"] = tokenized["input_ids"].clone()
+            # labels: 패딩 토큰을 -100으로 변환
+            labels = []
+            for input_ids in tokenized["input_ids"]:
+                labels.append([tok if tok != self.tokenizer.pad_token_id else -100 for tok in input_ids])
+            tokenized["labels"] = labels
             return tokenized
 
         split_data = dataset.train_test_split(test_size=0.1, seed=42)
